@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>re3 web port</title>
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+		background: #000;
+	}
+	#canvas {
+		display: block;
+		width: 100vw;
+		height: 100vh;
+		outline: none;
+		touch-action: none;
+	}
+	#crashOverlay {
+		display: none;
+		position: fixed;
+		inset: 0;
+		z-index: 1000;
+		background: rgba(20, 0, 0, 0.95);
+		color: #ff6b6b;
+		font-family: "Consolas", "Menlo", monospace;
+		padding: 24px;
+		box-sizing: border-box;
+		overflow: auto;
+	}
+	#crashOverlay h1 {
+		color: #ff3b3b;
+		font-size: 20px;
+		margin: 0 0 8px 0;
+	}
+	#crashOverlay p {
+		color: #ddd;
+		margin: 0 0 16px 0;
+		font-size: 13px;
+	}
+	#crashOverlay pre {
+		white-space: pre-wrap;
+		word-break: break-word;
+		font-size: 12px;
+		line-height: 1.4;
+		color: #eee;
+		background: rgba(255, 255, 255, 0.05);
+		padding: 12px;
+		border-radius: 4px;
+	}
+	#loadingOverlay {
+		position: fixed;
+		inset: 0;
+		z-index: 900;
+		background: #000;
+		color: #ccc;
+		font-family: "Consolas", "Menlo", monospace;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 16px;
+		text-align: center;
+		padding: 24px;
+		box-sizing: border-box;
+	}
+	#loadingOverlay .spinner {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		border: 4px solid #333;
+		border-top-color: #6bb0ff;
+		animation: loadingSpin 0.8s linear infinite;
+	}
+	@keyframes loadingSpin { to { transform: rotate(360deg); } }
+	#loadingStatus {
+		font-size: 14px;
+		color: #eee;
+		max-width: 90vw;
+		word-break: break-word;
+	}
+	#loadingHint {
+		font-size: 12px;
+		color: #888;
+	}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="loadingOverlay">
+	<div class="spinner"></div>
+	<div id="loadingStatus">Starting up...</div>
+	<div id="loadingHint">First load can take a few minutes (~1.6GB of game assets) - this is not frozen, keep this tab open.</div>
+</div>
+<div id="crashOverlay">
+	<h1 id="crashTitle">The game has crashed</h1>
+	<p>Please screenshot or copy this and report it. Reload the page to try again.</p>
+	<pre id="crashDetail"></pre>
+</div>
+<script>
+// re3 webport by woahhcrackers
+// this file is vibed, but nobody cares because its so small and doesnt matter
+
+
+
+	function updateLoadingStatus(s) {
+		var el = document.getElementById('loadingStatus');
+		if (el) el.textContent = s;
+		if (s === 'Initialise: end') {
+			var overlay = document.getElementById('loadingOverlay');
+			if (overlay) overlay.style.display = 'none';
+		}
+	}
+</script>
+<script>
+	var recentLog = [];
+	function pushLog(s) {
+		recentLog.push(s);
+		if (recentLog.length > 300)
+			recentLog.shift();
+	}
+
+	var crashShown = false;
+	function showCrash(title, detail) { // w crash log
+		if (crashShown) return;
+		crashShown = true;
+		document.getElementById('crashTitle').textContent = title;
+		document.getElementById('crashDetail').textContent =
+			detail + '\n\n--- recent log ---\n' + recentLog.join('\n');
+		document.getElementById('crashOverlay').style.display = 'block';
+	}
+
+	var Module = {
+		canvas: document.getElementById('canvas'),
+		print: function (s) { pushLog(s); console.log(s); },
+		printErr: function (s) { pushLog(s); console.error(s); },
+		onAbort: function (what) { showCrash('Emscripten abort', String(what)); },
+		setStatus: function (s) { if (s) updateLoadingStatus(s); },
+		preRun: [function () {
+			FS.mkdir('/userfiles');
+			FS.mount(IDBFS, {}, '/userfiles');
+			Module.addRunDependency('idbfs-load');
+			FS.syncfs(true, function (err) {
+				if (err) console.error('Failed to load save data from IndexedDB:', err);
+				Module.removeRunDependency('idbfs-load');
+			});
+		}],
+	};
+
+	window.onerror = function (msg, source, lineno, colno, error) {
+		showCrash('Uncaught error', msg + '\n  at ' + source + ':' + lineno + ':' + colno +
+			(error && error.stack ? '\n' + error.stack : ''));
+	};
+	window.addEventListener('unhandledrejection', function (e) {
+		var r = e.reason;
+		var msg = (r && (r.name || '') + ' ' + (r.message || '')) || String(r);
+		if (/pointer\s?lock/i.test(msg)) {
+			e.preventDefault();
+			console.warn('Suppressed pointer-lock rejection:', msg);
+			return;
+		}
+		showCrash('Unhandled promise rejection', r && r.stack ? r.stack : msg);
+	});
+</script>
+<script src="re3.js"></script>
+</body>
+</html>
