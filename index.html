@@ -101,11 +101,11 @@
 	<pre id="crashDetail"></pre>
 </div>
 <script>
-// re3 webport by woahhcrackers
-// this file is vibed, but nobody cares because its so small and doesnt matter
-
-
-
+	// Distinguishes "still loading" from "crashed" - without this, a slow ~1.6GB asset
+	// preload and a silent crash looked identical to the user. Shown by default, hidden only
+	// once the game reaches "Initialise: end" (see updateLoadingStatus below and Game.cpp's
+	// STEP macro). The crash overlay (above) takes over on top of this if something goes wrong
+	// mid-load instead of this ever silently disappearing.
 	function updateLoadingStatus(s) {
 		var el = document.getElementById('loadingStatus');
 		if (el) el.textContent = s;
@@ -116,6 +116,9 @@
 	}
 </script>
 <script>
+	// Keep a rolling buffer of engine log lines so a crash report can show recent context
+	// leading up to it, without a permanently-visible on-page console (that's what devtools
+	// is for during dev - beta testers need a crash report, not a live log firehose).
 	var recentLog = [];
 	function pushLog(s) {
 		recentLog.push(s);
@@ -124,7 +127,7 @@
 	}
 
 	var crashShown = false;
-	function showCrash(title, detail) { // w crash log
+	function showCrash(title, detail) {
 		if (crashShown) return;
 		crashShown = true;
 		document.getElementById('crashTitle').textContent = title;
@@ -138,7 +141,14 @@
 		print: function (s) { pushLog(s); console.log(s); },
 		printErr: function (s) { pushLog(s); console.error(s); },
 		onAbort: function (what) { showCrash('Emscripten abort', String(what)); },
+		// Called by the generated re3.js loader itself during the re3.data download/decompress
+		// phase (before any of our own C++ STEP() checkpoints can run) - this is the biggest
+		// chunk of the "5 minutes with nothing on screen" complaint, so surface it too.
 		setStatus: function (s) { if (s) updateLoadingStatus(s); },
+		// Save games live under /userfiles in Emscripten's in-memory filesystem, which is
+		// wiped on every reload unless backed by something real - mount IDBFS there and
+		// pull down whatever was persisted last time before main() runs. C++ persists new
+		// writes back out via FS.syncfs(false, ...) after a save completes (see PCSave.cpp).
 		preRun: [function () {
 			FS.mkdir('/userfiles');
 			FS.mount(IDBFS, {}, '/userfiles');
@@ -158,6 +168,10 @@
 		var r = e.reason;
 		var msg = (r && (r.name || '') + ' ' + (r.message || '')) || String(r);
 		if (/pointer\s?lock/i.test(msg)) {
+			// SDL_SetRelativeMouseMode() -> requestPointerLock() rejects while the page has no
+			// user gesture yet (the game enables the mouse cursor during init). Not a crash -
+			// SDL re-requests once the player actually clicks. Swallow so the crash overlay
+			// doesn't false-positive on the first load.
 			e.preventDefault();
 			console.warn('Suppressed pointer-lock rejection:', msg);
 			return;
