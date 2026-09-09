@@ -93,7 +93,7 @@
 <div id="loadingOverlay">
 	<div class="spinner"></div>
 	<div id="loadingStatus">Starting up...</div>
-	<div id="loadingHint">First load can take a few minutes (~1.6GB of game assets) - this is not frozen, keep this tab open.</div>
+	<div id="loadingHint">First load can take a few minutes (~860MB of game assets) - this is not frozen, keep this tab open.</div>
 </div>
 <div id="crashOverlay">
 	<h1 id="crashTitle">The game has crashed</h1>
@@ -101,7 +101,7 @@
 	<pre id="crashDetail"></pre>
 </div>
 <script>
-	// Distinguishes "still loading" from "crashed" - without this, a slow ~1.6GB asset
+	// Distinguishes "still loading" from "crashed" - without this, a slow ~860MB asset
 	// preload and a silent crash looked identical to the user. Shown by default, hidden only
 	// once the game reaches "Initialise: end" (see updateLoadingStatus below and Game.cpp's
 	// STEP macro). The crash overlay (above) takes over on top of this if something goes wrong
